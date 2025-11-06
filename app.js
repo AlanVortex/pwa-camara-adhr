@@ -44,8 +44,26 @@ document.addEventListener('DOMContentLoaded', () => {
 async function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         try {
-            const registration = await navigator.serviceWorker.register('sw.js');
+            // Esperar a que la página cargue completamente
+            await new Promise(resolve => {
+                if (document.readyState === 'complete') {
+                    resolve();
+                } else {
+                    window.addEventListener('load', resolve);
+                }
+            });
+            
+            const registration = await navigator.serviceWorker.register('./sw.js', {
+                scope: './'
+            });
+            
             console.log('✅ Service Worker registrado:', registration);
+            
+            // Verificar si hay actualizaciones
+            registration.addEventListener('updatefound', () => {
+                console.log('🔄 Actualización del Service Worker encontrada');
+            });
+            
             showStatus('PWA lista para instalar', 'success');
         } catch (error) {
             console.error('❌ Error al registrar Service Worker:', error);

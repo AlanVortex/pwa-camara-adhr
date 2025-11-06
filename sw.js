@@ -5,12 +5,12 @@
 
 const CACHE_NAME = 'pwa-camara-v1';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/app.js',
-  '/manifest.json',
-  '/assets/192.png',
-  '/assets/512.png'
+  './',
+  './index.html',
+  './app.js',
+  './manifest.json',
+  './assets/192.png',
+  './assets/512.png'
 ];
 
 /**
