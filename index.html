@@ -146,6 +146,44 @@
             display: none;
         }
 
+        /* Galería de fotos */
+        #gallery {
+            display: flex;
+            overflow-x: auto;
+            gap: 8px;
+            margin-top: 12px;
+            padding: 10px 0;
+            scroll-behavior: smooth;
+        }
+
+        #gallery img {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform 0.2s;
+            border: 2px solid #667eea;
+        }
+
+        #gallery img:hover {
+            transform: scale(1.1);
+        }
+
+        #gallery::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        #gallery::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        #gallery::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+
         @media (max-width: 600px) {
             h1 {
                 font-size: 1.5rem;
@@ -171,12 +209,16 @@
             
             <div class="button-group">
                 <button id="takePhoto">📸 Capturar Foto</button>
+                <button id="switchCamera">🔄 Cambiar Cámara</button>
                 <button id="closeCamera">❌ Cerrar Cámara</button>
             </div>
         </div>
         
         <!-- Canvas para mostrar la foto capturada -->
         <canvas id="canvas"></canvas>
+        
+        <!-- Galería de fotos capturadas -->
+        <div id="gallery"></div>
         
         <!-- Área de estado/mensajes -->
         <div id="status" class="hidden"></div>

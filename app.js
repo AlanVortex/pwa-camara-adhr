@@ -7,10 +7,14 @@ let stream = null;
 let videoElement = null;
 let canvasElement = null;
 let statusElement = null;
+let galleryElement = null;
+let currentFacingMode = 'environment'; // Modo de cámara inicial: trasera
+let photos = []; // Arreglo para almacenar fotos capturadas
 
 // Elementos del DOM
 const openCameraBtn = document.getElementById('openCamera');
 const takePhotoBtn = document.getElementById('takePhoto');
+const switchCameraBtn = document.getElementById('switchCamera');
 const closeCameraBtn = document.getElementById('closeCamera');
 const cameraContainer = document.getElementById('cameraContainer');
 
@@ -22,13 +26,15 @@ document.addEventListener('DOMContentLoaded', () => {
     videoElement = document.getElementById('video');
     canvasElement = document.getElementById('canvas');
     statusElement = document.getElementById('status');
+    galleryElement = document.getElementById('gallery');
     
     // Registrar Service Worker
     registerServiceWorker();
     
     // Event Listeners
-    openCameraBtn.addEventListener('click', openCamera);
+    openCameraBtn.addEventListener('click', () => openCamera());
     takePhotoBtn.addEventListener('click', takePhoto);
+    switchCameraBtn.addEventListener('click', switchCamera);
     closeCameraBtn.addEventListener('click', closeCamera);
 });
 
@@ -53,10 +59,11 @@ async function registerServiceWorker() {
 /**
  * Abre la cámara del dispositivo
  * Solicita permisos y muestra el streaming de video
+ * @param {string} facingMode - Modo de cámara: 'environment' (trasera) o 'user' (frontal)
  */
-async function openCamera() {
+async function openCamera(facingMode = currentFacingMode) {
     try {
-        console.log('📷 Intentando abrir la cámara...');
+        console.log(`📷 Intentando abrir la cámara en modo: ${facingMode}...`);
         showStatus('Solicitando acceso a la cámara...', 'info');
         
         // Verificar soporte de getUserMedia
@@ -64,11 +71,18 @@ async function openCamera() {
             throw new Error('Tu navegador no soporta acceso a la cámara');
         }
         
-        // Configuración para solicitar video
-        // facingMode: 'environment' usa la cámara trasera en móviles
+        // Si ya hay un stream activo, cerrarlo primero
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Actualizar el modo de cámara actual
+        currentFacingMode = facingMode;
+        
+        // Configuración para solicitar video con el modo de cámara especificado
         const constraints = {
             video: {
-                facingMode: 'environment', // Usa 'user' para cámara frontal
+                facingMode: { ideal: facingMode },
                 width: { ideal: 1280 },
                 height: { ideal: 720 }
             },
@@ -90,8 +104,10 @@ async function openCamera() {
         // Ocultar canvas si está visible
         canvasElement.classList.remove('show');
         
-        console.log('✅ Cámara abierta exitosamente');
-        showStatus('Cámara activa - Lista para capturar', 'success');
+        // Logging del modo de cámara
+        const cameraType = facingMode === 'environment' ? 'trasera' : 'frontal';
+        console.log(`✅ Cámara abierta exitosamente - Usando cámara ${cameraType}`);
+        showStatus(`Cámara ${cameraType} activa - Lista para capturar`, 'success');
         
     } catch (error) {
         console.error('❌ Error al abrir la cámara:', error);
@@ -105,6 +121,12 @@ async function openCamera() {
             errorMessage = 'No se encontró ninguna cámara en el dispositivo.';
         } else if (error.name === 'NotReadableError') {
             errorMessage = 'La cámara está siendo usada por otra aplicación.';
+        } else if (error.name === 'OverconstrainedError') {
+            errorMessage = 'La cámara solicitada no está disponible. Intentando con la otra cámara...';
+            // Intentar con el otro modo de cámara
+            const alternativeMode = facingMode === 'environment' ? 'user' : 'environment';
+            currentFacingMode = alternativeMode;
+            return openCamera(alternativeMode);
         }
         
         showStatus(errorMessage, 'error');
@@ -112,15 +134,47 @@ async function openCamera() {
 }
 
 /**
+ * Cambia entre cámara frontal y trasera
+ * Cierra el stream actual y reabre con el nuevo modo
+ */
+async function switchCamera() {
+    try {
+        console.log('🔄 Cambiando de cámara...');
+        
+        // Verificar que hay un stream activo
+        if (!stream) {
+            showStatus('Primero debes abrir la cámara', 'error');
+            console.warn('⚠️ No hay stream activo para cambiar');
+            return;
+        }
+        
+        // Alternar entre modos
+        const newFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+        
+        console.log(`🔄 Cambiando de cámara ${currentFacingMode} a ${newFacingMode}`);
+        
+        // Reabrir cámara con el nuevo modo
+        await openCamera(newFacingMode);
+        
+    } catch (error) {
+        console.error('❌ Error al cambiar de cámara:', error);
+        showStatus('Error al cambiar de cámara', 'error');
+    }
+}
+
+/**
  * Captura una foto del video stream
  * Dibuja la imagen en el canvas y la convierte a Base64
+ * Guarda la foto en la galería
  */
 function takePhoto() {
     try {
         console.log('📸 Capturando foto...');
         
         if (!stream) {
-            throw new Error('No hay stream de cámara activo');
+            showStatus('Primero debes abrir la cámara', 'error');
+            console.warn('⚠️ No hay stream de cámara activo');
+            return;
         }
         
         // Obtener dimensiones del video
@@ -145,8 +199,15 @@ function takePhoto() {
         // Convertir canvas a Base64 (formato PNG)
         const photoBase64 = canvasElement.toDataURL('image/png');
         
+        // Guardar en el arreglo de fotos
+        photos.push(photoBase64);
+        
+        // Agregar a la galería
+        addPhotoToGallery(photoBase64, photos.length);
+        
         // Imprimir en consola
         console.log('✅ Foto capturada exitosamente');
+        console.log(`📊 Total de fotos: ${photos.length}`);
         console.log('📊 Tamaño del Base64:', photoBase64.length, 'caracteres');
         console.log('🖼️ Base64 de la imagen:', photoBase64.substring(0, 100) + '...');
         
@@ -161,15 +222,48 @@ function takePhoto() {
             console.log('🔗 URL temporal del Blob:', url);
         }, 'image/png');
         
-        showStatus('¡Foto capturada! Revisa la consola para ver el Base64', 'success');
-        
-        // Opcional: Cerrar la cámara después de capturar
-        // closeCamera();
+        showStatus(`¡Foto ${photos.length} capturada! Revisa la galería`, 'success');
         
     } catch (error) {
         console.error('❌ Error al capturar foto:', error);
         showStatus('Error al capturar la foto', 'error');
     }
+}
+
+/**
+ * Agrega una foto a la galería visual
+ * @param {string} photoBase64 - Imagen en formato Base64
+ * @param {number} photoNumber - Número de la foto
+ */
+function addPhotoToGallery(photoBase64, photoNumber) {
+    // Crear elemento de imagen
+    const img = document.createElement('img');
+    img.src = photoBase64;
+    img.alt = `Foto ${photoNumber}`;
+    img.title = `Foto ${photoNumber} - Click para ver en grande`;
+    
+    // Click para ver la foto en el canvas principal
+    img.addEventListener('click', () => {
+        const context = canvasElement.getContext('2d');
+        const tempImg = new Image();
+        tempImg.onload = () => {
+            canvasElement.width = tempImg.width;
+            canvasElement.height = tempImg.height;
+            context.drawImage(tempImg, 0, 0);
+            canvasElement.classList.add('show');
+            console.log(`🖼️ Mostrando foto ${photoNumber} en canvas`);
+            showStatus(`Mostrando foto ${photoNumber}`, 'info');
+        };
+        tempImg.src = photoBase64;
+    });
+    
+    // Agregar a la galería
+    galleryElement.appendChild(img);
+    
+    // Scroll automático al final de la galería
+    galleryElement.scrollLeft = galleryElement.scrollWidth;
+    
+    console.log(`🖼️ Foto ${photoNumber} agregada a la galería`);
 }
 
 /**
